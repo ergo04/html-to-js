@@ -1,5 +1,5 @@
 import { AppHeader } from "@/components/app-header";
-import { HtmlConverter } from "@/components/html-converter";
+import { HtmlConverter } from "@/components/html-converter-dynamic";
 import { FeaturesBar } from "@/components/features-bar";
 
 export default function Page() {

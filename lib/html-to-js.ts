@@ -67,14 +67,22 @@ interface ConversionOptions {
   appendToBody?: boolean;
 }
 
+/** Declared variable in generated JS (1-based line of the declaration). */
+export interface GeneratedBinding {
+  name: string;
+  line: number;
+}
+
+export interface HtmlToJsResult {
+  code: string;
+  bindings: GeneratedBinding[];
+}
+
 function sanitizeVarName(tag: string): string {
   return tag.replace(/[^a-zA-Z0-9]/g, "_");
 }
 
-function generateVarName(
-  tag: string,
-  counters: Map<string, number>
-): string {
+function generateVarName(tag: string, counters: Map<string, number>): string {
   const base = sanitizeVarName(tag);
   const count = counters.get(base) ?? 0;
   counters.set(base, count + 1);
@@ -95,10 +103,11 @@ function processNode(
   node: Node,
   parentVar: string | null,
   lines: string[],
+  bindings: GeneratedBinding[],
   counters: Map<string, number>,
   indent: string,
   options: ConversionOptions,
-  insideSvg: boolean
+  insideSvg: boolean,
 ): void {
   if (node.nodeType === Node.ELEMENT_NODE) {
     const el = node as Element;
@@ -111,13 +120,14 @@ function processNode(
     // Create element
     if (isSvgElement) {
       lines.push(
-        `${indent}${decl} ${varName} = document.createElementNS('${SVG_NS}', '${tag}');`
+        `${indent}${decl} ${varName} = document.createElementNS('${SVG_NS}', '${tag}');`,
       );
     } else {
       lines.push(
-        `${indent}${decl} ${varName} = document.createElement('${tag}');`
+        `${indent}${decl} ${varName} = document.createElement('${tag}');`,
       );
     }
+    bindings.push({ name: varName, line: lines.length });
 
     // Set attributes
     const attrs = el.attributes;
@@ -127,35 +137,25 @@ function processNode(
       const value = escapeJSString(attr.value);
 
       if (isSvgElement) {
-        lines.push(
-          `${indent}${varName}.setAttribute('${name}', '${value}');`
-        );
+        lines.push(`${indent}${varName}.setAttribute('${name}', '${value}');`);
       } else if (name === "class") {
         if (value.includes(" ")) {
           const classes = value.split(/\s+/).filter(Boolean);
           lines.push(
-            `${indent}${varName}.classList.add(${classes.map((c) => `'${c}'`).join(", ")});`
+            `${indent}${varName}.classList.add(${classes.map((c) => `'${c}'`).join(", ")});`,
           );
         } else {
-          lines.push(
-            `${indent}${varName}.classList.add('${value}');`
-          );
+          lines.push(`${indent}${varName}.classList.add('${value}');`);
         }
       } else if (name === "style") {
-        lines.push(
-          `${indent}${varName}.style.cssText = '${value}';`
-        );
+        lines.push(`${indent}${varName}.style.cssText = '${value}';`);
       } else if (name.startsWith("data-")) {
         const camelKey = name
           .slice(5)
           .replace(/-([a-z])/g, (_, c: string) => c.toUpperCase());
-        lines.push(
-          `${indent}${varName}.dataset.${camelKey} = '${value}';`
-        );
+        lines.push(`${indent}${varName}.dataset.${camelKey} = '${value}';`);
       } else {
-        lines.push(
-          `${indent}${varName}.setAttribute('${name}', '${value}');`
-        );
+        lines.push(`${indent}${varName}.setAttribute('${name}', '${value}');`);
       }
     }
 
@@ -172,13 +172,14 @@ function processNode(
             (el.childNodes.length === 1 && child.nodeType === Node.TEXT_NODE)
           ) {
             lines.push(
-              `${indent}${varName}.textContent = '${escapeJSString(text)}';`
+              `${indent}${varName}.textContent = '${escapeJSString(text)}';`,
             );
           } else {
             const textVar = generateVarName("text", counters);
             lines.push(
-              `${indent}${decl} ${textVar} = document.createTextNode('${escapeJSString(text)}');`
+              `${indent}${decl} ${textVar} = document.createTextNode('${escapeJSString(text)}');`,
             );
+            bindings.push({ name: textVar, line: lines.length });
             lines.push(`${indent}${varName}.appendChild(${textVar});`);
           }
         }
@@ -186,8 +187,9 @@ function processNode(
         const commentText = child.textContent ?? "";
         const commentVar = generateVarName("comment", counters);
         lines.push(
-          `${indent}${decl} ${commentVar} = document.createComment('${escapeJSString(commentText)}');`
+          `${indent}${decl} ${commentVar} = document.createComment('${escapeJSString(commentText)}');`,
         );
+        bindings.push({ name: commentVar, line: lines.length });
         lines.push(`${indent}${varName}.appendChild(${commentVar});`);
       } else if (child.nodeType === Node.ELEMENT_NODE) {
         lines.push("");
@@ -195,10 +197,11 @@ function processNode(
           child,
           varName,
           lines,
+          bindings,
           counters,
           indent,
           options,
-          newInsideSvg
+          newInsideSvg,
         );
       }
     }
@@ -210,87 +213,91 @@ function processNode(
   }
 }
 
-export function convertHtmlToJs(
+export function convertHtmlToJsDetailed(
   htmlString: string,
-  options: ConversionOptions = {}
-): string {
+  options: ConversionOptions = {},
+): HtmlToJsResult {
   const {
     wrapInFunction = false,
-    functionName = "createElements",
+    functionName = "Component",
     appendToBody = false,
   } = options;
 
-  // Parse the HTML string
   const parser = new DOMParser();
   const doc = parser.parseFromString(
     `<template>${htmlString}</template>`,
-    "text/html"
+    "text/html",
   );
   const template = doc.querySelector("template");
   if (!template || !template.content) {
-    return "// Error: Could not parse the HTML input";
+    return {
+      code: "// Error: Could not parse the HTML input",
+      bindings: [],
+    };
   }
 
   const fragment = template.content;
   const topLevelNodes = Array.from(fragment.childNodes).filter(
     (n) =>
       n.nodeType === Node.ELEMENT_NODE ||
-      (n.nodeType === Node.TEXT_NODE && n.textContent?.trim())
+      (n.nodeType === Node.TEXT_NODE && n.textContent?.trim()),
   );
 
   if (topLevelNodes.length === 0) {
-    return "// No elements found in the HTML input";
+    return {
+      code: "// No elements found in the HTML input",
+      bindings: [],
+    };
   }
 
   const lines: string[] = [];
+  const bindings: GeneratedBinding[] = [];
   const counters = new Map<string, number>();
   const baseIndent = wrapInFunction ? "  " : "";
-  const rootVarNames: string[] = [];
-
-  // Track root var names for later use
-  for (const node of topLevelNodes) {
-    if (node.nodeType === Node.ELEMENT_NODE) {
-      const el = node as Element;
-      const tag = el.tagName.toLowerCase();
-      const base = sanitizeVarName(tag);
-      const count = counters.get(base) ?? 0;
-      rootVarNames.push(count === 0 ? base : `${base}${count}`);
-    }
-  }
-
-  // Reset counters for actual generation
-  counters.clear();
+  const fragmentVar = options.rootVarName ?? "rootFragment";
+  const fragmentDeclKeyword = options.useConst ? "const" : "let";
 
   if (wrapInFunction) {
     lines.push(`export function ${functionName}() {`);
   }
 
+  lines.push(
+    `${baseIndent}${fragmentDeclKeyword} ${fragmentVar} = document.createDocumentFragment();`,
+  );
+  bindings.push({ name: fragmentVar, line: lines.length });
+
   for (let i = 0; i < topLevelNodes.length; i++) {
     const node = topLevelNodes[i];
     if (i > 0) lines.push("");
-    processNode(node, null, lines, counters, baseIndent, options, false);
+    processNode(
+      node,
+      fragmentVar,
+      lines,
+      bindings,
+      counters,
+      baseIndent,
+      options,
+      false,
+    );
   }
 
-  // Append to body or return
   if (wrapInFunction) {
-    if (rootVarNames.length === 1) {
-      lines.push("");
-      lines.push(`${baseIndent}return ${rootVarNames[0]};`);
-    } else if (rootVarNames.length > 1) {
-      lines.push("");
-      lines.push(
-        `${baseIndent}return [${rootVarNames.join(", ")}];`
-      );
-    }
+    lines.push("");
+    lines.push(`${baseIndent}return ${fragmentVar};`);
     lines.push("}");
   } else if (appendToBody) {
     lines.push("");
-    for (const varName of rootVarNames) {
-      lines.push(`document.body.appendChild(${varName});`);
-    }
+    lines.push(`document.body.appendChild(${fragmentVar});`);
   }
 
-  return lines.join("\n");
+  return { code: lines.join("\n"), bindings };
+}
+
+export function convertHtmlToJs(
+  htmlString: string,
+  options: ConversionOptions = {},
+): string {
+  return convertHtmlToJsDetailed(htmlString, options).code;
 }
 
 export type { ConversionOptions };

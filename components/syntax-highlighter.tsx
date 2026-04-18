@@ -119,7 +119,7 @@ export function SyntaxHighlighter({
   }
 
   return (
-    <div className="relative h-full overflow-auto font-mono text-sm leading-relaxed">
+    <div className="relative h-full overflow-auto font-mono text-sm leading-relaxed dark:bg-[#1E1E1E]">
       <pre className="p-4 m-0">
         <code>
           {showLineNumbers && (
