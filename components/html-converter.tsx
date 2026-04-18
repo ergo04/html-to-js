@@ -103,6 +103,7 @@ export function HtmlConverter() {
     htmlEditorRef.current = editor;
   };
 
+  // Convert HTML to JS
   useEffect(() => {
     if (!html.trim()) {
       setRawOutput("");
@@ -124,6 +125,7 @@ export function HtmlConverter() {
     }
   }, [html, options]);
 
+  // Update renames when bindings change
   useEffect(() => {
     const valid = new Set(bindings.map((b) => b.name));
     setRenames((prev) => {
@@ -249,61 +251,6 @@ export function HtmlConverter() {
 
   return (
     <div className="flex flex-col h-full">
-      <Dialog
-        open={renameOpen}
-        onOpenChange={(open) => {
-          setRenameOpen(open);
-          if (!open) setRenameCanonical(null);
-        }}
-      >
-        <DialogContent showCloseButton className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Rename variable</DialogTitle>
-            <DialogDescription>
-              Updates every occurrence of this binding in the generated code.
-              Double-click a name in the output or press F2 with the cursor on
-              it.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="rename-input" className="text-xs text-muted-foreground">
-              New name
-            </Label>
-            <Input
-              id="rename-input"
-              value={renameDraft}
-              onChange={(e) => {
-                setRenameDraft(e.target.value);
-                setRenameError("");
-              }}
-              className="font-mono text-sm"
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  handleRenameSave();
-                }
-              }}
-              autoFocus
-            />
-            {renameError ? (
-              <p className="text-sm text-destructive">{renameError}</p>
-            ) : null}
-          </div>
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setRenameOpen(false)}
-            >
-              Cancel
-            </Button>
-            <Button type="button" onClick={handleRenameSave}>
-              Apply
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       {/* Conversion options */}
       <div className="border-b border-border bg-card shrink-0">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between px-4 py-2.5">
@@ -515,6 +462,62 @@ export function HtmlConverter() {
           </div>
         </div>
       </div>
+
+      {/* Rename variable dialog */}
+      <Dialog
+        open={renameOpen}
+        onOpenChange={(open) => {
+          setRenameOpen(open);
+          if (!open) setRenameCanonical(null);
+        }}
+      >
+        <DialogContent showCloseButton className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Rename variable</DialogTitle>
+            <DialogDescription>
+              Updates every occurrence of this binding in the generated code.
+              Double-click a name in the output or press F2 with the cursor on
+              it.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="rename-input" className="text-xs text-muted-foreground">
+              New name
+            </Label>
+            <Input
+              id="rename-input"
+              value={renameDraft}
+              onChange={(e) => {
+                setRenameDraft(e.target.value);
+                setRenameError("");
+              }}
+              className="font-mono text-sm"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  handleRenameSave();
+                }
+              }}
+              autoFocus
+            />
+            {renameError ? (
+              <p className="text-sm text-destructive">{renameError}</p>
+            ) : null}
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setRenameOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button type="button" onClick={handleRenameSave}>
+              Apply
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

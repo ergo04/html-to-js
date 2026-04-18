@@ -19,18 +19,16 @@ export function RippleThemeToggle() {
       className="relative size-9 rounded-lg overflow-hidden cursor-pointer"
     >
       <Sun
-        className={`size-[1.125rem] absolute transition-all duration-300 ${
-          theme === "dark"
+        className={`size-4.5 absolute transition-all duration-300 ${theme === "dark"
             ? "rotate-90 scale-0 opacity-0"
             : "rotate-0 scale-100 opacity-100"
-        }`}
+          }`}
       />
       <Moon
-        className={`size-[1.125rem] absolute transition-all duration-300 ${
-          theme === "dark"
+        className={`size-4.5 absolute transition-all duration-300 ${theme === "dark"
             ? "rotate-0 scale-100 opacity-100"
             : "-rotate-90 scale-0 opacity-0"
-        }`}
+          }`}
       />
       <span className="sr-only">
         {theme === "dark" ? "Passa al tema chiaro" : "Passa al tema scuro"}

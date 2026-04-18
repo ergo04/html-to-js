@@ -6,6 +6,7 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
-}
+  allowedDevOrigins: ["html-to-js.test"],
+};
 
-export default nextConfig
+export default nextConfig;
